@@ -66,3 +66,48 @@ The comparison checks matching symbol/known adjustment, returned OHLCV validity,
 5. Separately record documented oldest date, actual successful oldest sample, missing/revised observations, timestamp semantics, pagination, latency, quotas, entitlements and terms. Stop on rate-limit/auth errors; do not hit trading endpoints to test credentials. Only promote Robinhood if coverage, licensed retention/research use, timestamp integrity, adjustments, access restrictions and quality meet the research requirements. Otherwise keep Alpaca as the documented source.
 
 Research and comparison outputs stay under ignored `data/` and `reports/`. Level II, current charts or scans must never be silently backfilled into historical features. SEC/political/news ingestion remains later-milestone work even if a data source eventually exposes those tools.
+
+## Recheck after the successful ChatGPT SPY request
+
+The user reports that the official Robinhood integration is connected in ChatGPT and returned historical SPY daily prices in a read-only request. That establishes a useful **user-reported ChatGPT result**. The response/tool schema was not supplied to this app, so it does not establish Codex tool availability, local Python authorization, adjustment definitions, complete history, storage rights or the absence of interpolated bars.
+
+The current Codex session was rechecked independently:
+
+| Layer | Observed result | Consequence |
+| --- | --- | --- |
+| Codex tools exposed to this session | No Robinhood tools in the available tool catalog | There is no authorized Robinhood historical-price tool for this agent to call. No guessed tool names were invoked. |
+| Cloud network policy | Restricted, enforced, no custom allowed hosts | The supplied MCP endpoint and official support entry point both still fail at the proxy with HTTP 403 CONNECT denial. The requests did not reach Robinhood. |
+| App authorization | No managed secret/runtime bindings for Robinhood | The ChatGPT connector does not supply an application grant. No connector credentials, browser sessions or financial-account details were extracted. |
+| App data transport | No verified official auth flow/schema/binding | `RobinhoodDaily` and the empty MCP allowlist remain disabled. No authenticated Robinhood request or actual cross-provider comparison was run. |
+
+**Development priority:** unblock and verify Robinhood research access first; do not label it an operational primary before those gates pass. Alpaca remains the functioning code path and explicitly selected fallback. Its genuine-data validation is still separate and requires market-data credentials.
+
+### Supported path forward, without inventing an integration
+
+1. For immediate Robinhood research, use the **already-working official ChatGPT integration** for data-reading requests only. This is the one connection the user has reported working. It does not automatically write datasets into this application.
+2. To use Robinhood inside Codex, the client must actually expose its authorized Robinhood tools to this task. If the Codex client offers the official connector for this workspace/session, attach it there and recheck the available tool catalog. A ChatGPT-only connection cannot be repurposed by copying its credentials. If the client does not support exposing it here, connector access remains unavailable in Codex.
+3. A standalone Python integration requires a **Robinhood-documented supported client/API and application authorization path**. No such path has been verified here because official documentation is blocked. Do not fabricate OAuth URLs, scopes, token exchange endpoints, tool names, schemas or undocumented brokerage APIs. MCP exposure to an agent alone is not an app-owned API grant.
+4. Enable exact documentation/service domains in the runtime policy and verify the live status before retrying. Read the official authentication, data licensing, automation and retention terms. If they do not permit this app's automated retrieval and local caching, do not activate Robinhood storage; continue with Alpaca under its own terms.
+5. Once an authorized data tool is exposed, inspect its exact read-only input/output contract and official terms, then request a small SPY sample. Preserve the original source response outside Git where retention is permitted; confirm session timestamps, volume units, adjustment semantics, pagination, delay and interpolation flags. Do not ask an LLM to reconstruct missing bars or infer fields from prose summaries.
+6. Only then implement the verified schema normalizer and the documented application transport, add exact allowlisted bindings in a reviewed source change, and run the independent SPY/provider comparison. If a documented export is available and licensed for this purpose, a separately reviewed user-supplied export/import path is an option; **no Robinhood export format or permission is assumed or implemented**.
+
+No additional login, account-balance query or trading-tool invocation is necessary to establish this blocker. Never use order endpoints to probe whether authorization works.
+
+### Normalization and metadata retention ready for a future verified adapter
+
+The existing storage pipeline now preserves optional `provider_timestamp` (timezone-aware original daily bar-start instant) and nullable `is_interpolated` flags alongside OHLCV. It retains `session_timezone`, `timestamp_semantics`, the explicit adjustment mode, original endpoint, request bounds and retrieval timestamp in provenance. These are internal normalization fields, **not claims about Robinhood's response schema**.
+
+Alpaca retains the provider's original UTC bar timestamp instead of discarding it when constructing the New York session index. Its current response does not establish a per-bar interpolation field, so flags remain unknown (`null`), never invented `false`. Known interpolated rows may be retained as labeled source evidence but cannot enter dashboard/backtest execution. Missing legacy flags remain unknown; that limitation is exposed by comparison reports. The engine does not silently replace missing bars.
+
+DuckDB/Parquet roundtrip tests retain UTC instants across EST/EDT, adjustment metadata, all three interpolation states and source identity. Flag changes produce a new dataset version. Metadata checks reject naive/missing/mismatched timestamps and string flags. Stored bar-start time must never be treated as first-public availability time for earnings, filings or news.
+
+### Public-research-source investigation remains separate
+
+| Research input | Original public source to investigate | Integrity requirement / present status |
+| --- | --- | --- |
+| SEC filings and Form 4 transactions | SEC EDGAR: https://www.sec.gov/edgar/search-and-access | Preserve accession, public acceptance/publication time, original transaction date and amendments; distinguish code-P purchases from exercises/awards and automatic plans. Live retrieval, fair-access terms and retention remain unverified here. |
+| House transaction disclosures | Official House disclosure portal: https://disclosures-clerk.house.gov/ | Preserve filing/publication dates, amendment identity and value ranges; transaction dates are not public-availability dates. No ingestion or rights verification has run. |
+| Senate transaction disclosures | Official Senate disclosure portal: https://efdsearch.senate.gov/search/ | Review portal access/use restrictions before any automation; no scraping or ingestion is implemented. |
+| Political/historical events, earnings and news | Original government/issuer releases and appropriately licensed timestamped archives | Retain original source, first-public time, revisions, expectations and delayed ingestion. No historical election outcomes, insider alerts or news-derived predictions are fabricated. |
+
+These are official-source **investigation targets**, not newly retrieved evidence or a claim that automated access/storage is permitted. Robinhood availability of any of these datasets remains unverified. SEC monitoring, insider alerts, politician/event ingestion and news analysis remain future Milestone 3 work; no service has been silently activated by this connection recheck.

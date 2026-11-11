@@ -1,3 +1,15 @@
+# Current connection recheck and metadata retention
+
+The user reports a working official ChatGPT Robinhood integration and a successful read-only SPY daily-price request. Current Codex verification still found **zero exposed Robinhood tools**, no managed Robinhood authorization binding, and proxy HTTP 403 CONNECT denial for the official MCP endpoint and support site. No trading/account tools were called, no connector credentials were extracted and no authenticated Robinhood response was obtained by this app. These are session-specific blockers, not a claim that the user's ChatGPT connection failed.
+
+Latest code validation: **83 tests passed**, `pip check` passed and `git diff --check` passed. New tests verify timezone-aware provider timestamp retention across DST, session consistency, nullable interpolation flags, metadata roundtrips, version changes when flags change, rejection of malformed metadata, refusal of known interpolated bars in backtests, and comparison-report disclosure of unknown/flagged bars. Alpaca mock-adapter tests now assert preserved UTC instants and unknown interpolation status. All prices in these tests remain labeled fixtures.
+
+Robinhood research remains the development priority, with Alpaca available as an explicit fallback. No live Robinhood adapter, data-accuracy comparison, historical coverage claim, or automated-storage permission is inferred from the ChatGPT success. The [evaluation recheck](ROBINHOOD_MCP_EVALUATION.md#recheck-after-the-successful-chatgpt-spy-request) documents supported next steps and the unverified official auth/terms requirements. The active application's read-only deny-by-default boundary is unchanged.
+
+Earlier review evidence below is retained as implementation history; its test counts apply to those earlier revisions.
+
+---
+
 # Robinhood MCP candidate follow-up
 
 This follow-up adds a provider-neutral selection/fallback boundary, an empty immutable MCP data-tool allowlist, a disabled Robinhood daily adapter, and a cached-data consistency comparison command. No production MCP authorization/HTTP transport or live tool binding is implemented. The Python application cannot inherit a Codex connector's authorization.

@@ -84,6 +84,11 @@ def test_actual_adapter_preserves_dst_session_dates_and_request(monkeypatch,adju
     assert list(frame.index)==[pd.Timestamp('2024-03-08'),pd.Timestamp('2024-03-11')]
     assert meta.request_start=='2024-03-08' and meta.request_end=='2024-03-11'
     assert meta.adjustment==adjustment and meta.source_url.endswith('/SPY/bars')
+    assert str(frame.provider_timestamp.dtype)=='datetime64[ns, UTC]'
+    assert frame.provider_timestamp.iloc[0]==pd.Timestamp('2024-03-08T05:00:00Z')
+    assert frame.provider_timestamp.iloc[1]==pd.Timestamp('2024-03-11T04:00:00Z')
+    assert frame.is_interpolated.isna().all()
+    assert meta.session_timezone=='America/New_York'
 
 
 def test_adapter_does_not_silently_normalize_intraday_bar(monkeypatch):

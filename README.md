@@ -86,3 +86,9 @@ python -m market_lab fetch SPY 2024-03-01 2024-04-05 --provider robinhood_mcp --
 ```
 
 Fetch now prints JSON containing `dataset_version`, `requested_provider`, `selected_provider` and `used_fallback`. A fallback dataset retains its actual Alpaca provenance; it must never be reported as Robinhood data. The dashboard also makes source selection explicit.
+
+### ChatGPT connection versus Codex/app access
+
+A successful Robinhood SPY request in ChatGPT does not make Robinhood tools available to this Codex session or authorize this Python app. The latest recheck found **no exposed Robinhood tools** and continued proxy denial of its official endpoint/docs. The [connection-layer findings and supported next steps](docs/ROBINHOOD_MCP_EVALUATION.md#recheck-after-the-successful-chatgpt-spy-request) distinguish those blockers from the user's working ChatGPT connection.
+
+The pipeline now preserves timezone-aware provider bar timestamps, session-timezone/adjustment provenance and nullable interpolation flags. Unknown flags stay unknown; known interpolated bars are excluded from backtests. This preparation is tested using labeled fixtures and Alpaca mock responses, not presented as a live Robinhood adapter.

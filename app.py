@@ -4,7 +4,7 @@ from datetime import date, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from market_lab.data import AlpacaDaily, Store, UNIVERSE, require_adjusted_provenance
+from market_lab.data import AlpacaDaily, Store, UNIVERSE, require_adjusted_provenance, require_observed_bars
 from market_lab.strategies import Strategy
 from market_lab.backtest import run, metrics, trade_statistics, Costs
 from market_lab.experiments import record
@@ -22,6 +22,7 @@ if section == "Overview":
     st.subheader("Read-only market data")
     st.write("Alpaca IEX daily adjusted research bars; no synthetic fallback. Provider keys are read from environment variables.")
     st.info("Robinhood official Trading MCP is being evaluated as a primary research-data candidate. It remains disabled pending verified official documentation, data-only authorization, tool schemas and provider comparison. Alpaca remains available.")
+    st.caption("A ChatGPT Robinhood connection does not expose tools to Codex or authorize this Python app. Robinhood live retrieval is unavailable in this build.")
     with st.form("fetch"):
         provider = st.selectbox("Data provider", ["alpaca", "robinhood_mcp"])
         fallback = st.checkbox("Explicitly permit Alpaca fallback if the selected provider is unavailable", value=False)
@@ -54,6 +55,7 @@ elif section in ["Strategy Lab", "Risk Center", "Paper Portfolio"]:
             st.error("SYNTHETIC TEST FIXTURE — development output only, not market research.")
         try:
             require_adjusted_provenance(meta)
+            require_observed_bars(bars)
         except ValueError as exc:
             st.error(str(exc))
             st.stop()

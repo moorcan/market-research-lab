@@ -28,6 +28,9 @@ def compare_datasets(left, left_meta, right, right_meta, start, end):
         unexpected = frame.index.difference(expected)
         quality.append({
             'provider':meta.provider, 'sessions_returned':len(frame),
+            'interpolated_sessions':int(frame.is_interpolated.fillna(False).sum()) if 'is_interpolated' in frame else None,
+            'interpolation_unknown_sessions':int(frame.is_interpolated.isna().sum()) if 'is_interpolated' in frame else len(frame),
+            'provider_timestamps_preserved':'provider_timestamp' in frame,
             'missing_sessions':[str(day.date()) for day in missing],
             'unexpected_sessions':[str(day.date()) for day in unexpected],
             'complete_requested_range':len(missing)==0 and len(unexpected)==0,

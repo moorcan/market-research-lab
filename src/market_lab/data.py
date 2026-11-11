@@ -25,6 +25,9 @@ class Provenance:
     request_end: str | None = None
     source_url: str | None = None
     symbol: str | None = None
+    session_timezone: str | None = None
+    timestamp_semantics: str | None = None
+    interpolation_policy: str = "unknown"
 
 class PriceProvider(Protocol):
     def fetch(self, symbol: str, start: str, end: str) -> tuple[pd.DataFrame, Provenance]: ...
@@ -46,7 +49,28 @@ def validate(frame, start=None, end=None):
     expected = calendar.sessions_in_range(start or frame.index.min(), end or frame.index.max()).tz_localize(None)
     if not frame.index.equals(expected):
         raise ValueError("Missing or unexpected trading sessions; never fill prices silently")
+    if "provider_timestamp" in frame:
+        timestamps = frame["provider_timestamp"]
+        if not isinstance(timestamps.dtype, pd.DatetimeTZDtype) or timestamps.isna().any():
+            raise ValueError("Provider timestamps must be nonmissing timezone-aware instants")
+        # Daily bar-start instants must map to the retained New York session.
+        sessions = pd.DatetimeIndex(timestamps.dt.tz_convert("America/New_York").dt.tz_localize(None).dt.normalize())
+        if not sessions.equals(frame.index):
+            raise ValueError("Provider timestamps do not match market session dates")
+    if "is_interpolated" in frame and not pd.api.types.is_bool_dtype(frame["is_interpolated"].dtype):
+        raise ValueError("Interpolation flags must be boolean or nullable boolean, never inferred from strings")
     return frame
+
+
+def require_observed_bars(frame):
+    """Preserve flagged bars in storage but never use known interpolations in backtests.
+
+    Missing/NA flags mean unknown, not false. Legacy inputs remain usable with
+    that limitation; no interpolation status is fabricated by the pipeline.
+    """
+    if "is_interpolated" in frame and frame["is_interpolated"].fillna(False).any():
+        raise ValueError("Interpolated bars cannot enter research backtests")
+
 
 class AlpacaDaily:
     """Read-only IEX daily bars. No trading endpoint or order API."""
@@ -74,10 +98,13 @@ class AlpacaDaily:
         local = timestamps.dt.tz_localize(None)
         if not local.eq(local.dt.normalize()).all():
             raise ValueError("Daily bar timestamps must identify New York session midnight")
+        frame["provider_timestamp"] = timestamps.dt.tz_convert("UTC").array
+        # Alpaca's bar response here does not establish a per-bar interpolation flag.
+        frame["is_interpolated"] = pd.array([pd.NA] * len(frame), dtype="boolean")
         frame.index = pd.DatetimeIndex(local)
-        frame = frame[["open", "high", "low", "close", "volume"]].sort_index()
+        frame = frame[["open", "high", "low", "close", "volume", "provider_timestamp", "is_interpolated"]].sort_index()
         validate(frame, start, end)
-        meta = Provenance("Alpaca", "stocks/v2 daily IEX", "IEX only, not consolidated SIP", adjustment, datetime.now(timezone.utc).isoformat(), ("Dividend/split-adjusted research units, NOT executable prices; no separate dividends credited. " if adjustment == "all" else "Raw IEX bars for inspection only; corporate-action ledger is not implemented. ") + "IEX volume is partial. Fixed ETF universe has selection bias.", request_start=start, request_end=end, source_url=f"https://data.alpaca.markets/v2/stocks/{symbol}/bars", symbol=symbol)
+        meta = Provenance("Alpaca", "stocks/v2 daily IEX", "IEX only, not consolidated SIP", adjustment, datetime.now(timezone.utc).isoformat(), ("Dividend/split-adjusted research units, NOT executable prices; no separate dividends credited. " if adjustment == "all" else "Raw IEX bars for inspection only; corporate-action ledger is not implemented. ") + "IEX volume is partial. Fixed ETF universe has selection bias.", request_start=start, request_end=end, source_url=f"https://data.alpaca.markets/v2/stocks/{symbol}/bars", symbol=symbol, session_timezone="America/New_York", timestamp_semantics="provider daily bar-start instant; not publication/availability time", interpolation_policy="not supplied by provider response; nullable flags remain unknown")
         return frame, meta
 
 class Store:

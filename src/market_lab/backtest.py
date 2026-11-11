@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from .data import validate
+from .data import validate, require_observed_bars
 from .serialization import json_safe
 
 ADJUSTED_EXPLORATORY = "adjusted_exploratory"
@@ -30,6 +30,7 @@ def run(bars, targets, initial=2700.0, costs=Costs(), max_allocation=0.95, parti
     if simulation_mode != ADJUSTED_EXPLORATORY:
         raise ValueError("Executable-price simulation is not implemented; use adjusted_exploratory only")
     validate(bars)
+    require_observed_bars(bars)
     if not np.isfinite(initial) or initial <= 0 or not 0 < max_allocation <= 1 or not 0 < participation <= 1:
         raise ValueError("Invalid portfolio assumptions")
     if not targets.index.equals(bars.index) or not np.isfinite(targets).all() or not targets.between(0, 1).all():
