@@ -1,12 +1,11 @@
 """Repeatable local retrieval and historical research commands."""
 import argparse
-import json
-from dataclasses import asdict
 import pandas as pd
-from .data import AlpacaDaily, Store, UNIVERSE
+from .data import AlpacaDaily, Store, UNIVERSE, require_adjusted_provenance
 from .strategies import Strategy
 from .backtest import run, Costs, metrics, trade_statistics
 from .experiments import record
+from .serialization import dumps
 
 
 def main():
@@ -37,12 +36,13 @@ def main():
         print(store.save(args.symbol,bars,meta))
     else:
         bars,meta=store.load(args.version)
+        require_adjusted_provenance(meta)
         strategy=Strategy(args.strategy,args.window,args.threshold)
         costs=Costs(args.fee_bps,args.spread_bps,args.slippage_bps)
         result=run(bars,strategy.signals(bars),args.cash,costs)
         passive=run(bars,pd.Series(1.,index=bars.index),args.cash,costs)
         identifier=record(args.reports_dir,args.version,meta,strategy,costs,result)
-        print(json.dumps({'status':'TEST FIXTURE ONLY' if meta.fixture else 'exploratory historical simulation; not holdout validated','experiment':identifier,'strategy':metrics(result),'passive':metrics(passive),'exits':trade_statistics(result),'beats_passive_and_cash':bool(result.equity.iloc[-1]>max(passive.equity.iloc[-1],args.cash))},indent=2,allow_nan=False))
+        print(dumps({'simulation_mode':result.simulation_mode,'executable_price_simulation':False,'status':'TEST FIXTURE ONLY' if meta.fixture else 'exploratory historical simulation; not holdout validated','experiment':identifier,'strategy':metrics(result),'passive':metrics(passive),'exits':trade_statistics(result),'beats_passive_and_cash':bool(result.equity.iloc[-1]>max(passive.equity.iloc[-1],args.cash))},indent=2))
 
 if __name__ == '__main__':
     main()

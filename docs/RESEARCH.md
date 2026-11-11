@@ -43,3 +43,25 @@ Milestone 3: FRED/ALFRED vintages with public release times, SEC Form 4 parsing 
 Initial political case: November 3, 2026 US midterm election. Store sourced public outcomes and archived expectations separately, without partisan return assumptions. No election outcome or market reaction is fabricated in this repository. Before using event-study results, specify benchmark, horizons, overlapping-event treatment, sample size, confidence intervals and out-of-sample evaluation. Event contracts conservatively use max(publication, ingestion)+timestamp uncertainty; this can exclude legitimate archived history and must be explicitly justified for each archival source.
 
 Milestone 4: durable forward paper portfolios, idempotent local orders, realized/unrealized P&L and reconciliation. Optional paper-only Alpaca execution is not implemented. Milestone 5: opt-in local scheduling, health checks, reports and requested notifications. No emails or background tasks are sent or installed.
+
+## Simulation modes and completion gates (PR #1 review)
+
+| Capability | Current behavior | Completion requirement |
+| --- | --- | --- |
+| Adjusted-price exploratory backtest | Implemented; `simulation_mode=adjusted_exploratory` and `executable_price_simulation=false` in saved reports and CLI output. No separate dividend cash or split-share credits. | Only `adjustment=all` provenance may enter dashboard/CLI backtests or experiment reports. Treat after-cost results as exploratory approximations. |
+| Executable-price historical simulation | **Not implemented**; requesting another engine mode raises an error. Raw quotes fetched by the smoke tool are inspection data only. | Add a distinct raw-price/accounting path, raw share units, action ledger and independent fill/accounting validation. Never relabel adjusted units as historical executable quotes. |
+| Corporate actions | Provider-adjusted bars only. | Validate split ratios, fractional entitlements, ex-date holdings, dividend receivables/pay-date cash, reinvestment assumptions and delisting proceeds. Reconcile provider adjustments against original action sources and prove dividends/splits are not credited twice. Keep adjusted feature prices separate from raw execution prices. |
+| Statistical/holdout validation — Milestone 2 | **Not implemented**; all current runs are in-sample exploration. | Freeze strategy/version/parameters and data vintages before an untouched final test; separate chronological train/validation/test, purge overlapping label horizons, use walk-forward validation, cost stress and multiple-testing/sensitivity reporting. Log final holdout access; never tune on it. Require sufficient sample sizes and benchmark comparisons. |
+| Forward paper trading — Milestone 4 | **Not implemented**; Paper Portfolio currently shows historical fictional accounting. | Durable local-only fictional $2,700 portfolios; idempotent timestamped decisions/orders, next-available simulated fills, stale-data refusal, restart recovery, realized/unrealized P&L, ledger reconciliation and backtest-vs-forward monitoring. Complete integrity and holdout gates first. No real-money endpoints or account connections. |
+
+### Explicitly deferred Event Intelligence scope — Milestone 3
+
+SEC Form 4 **monitoring**, unusual/clustered public **insider alerts**, sourced **historical political events** (including the November 2026 election case), and historical **news ingestion/classification/sentiment/event studies** remain scheduled for **Milestone 3**, not part of the price-based MVP. Current event code provides contracts, basic code-P classification, availability filtering and tests only. It does not download filings, continuously monitor disclosures, issue alerts, or calculate political/news predictions. Optional Form 13F and congressional-disclosure ingestion are also future research work.
+
+Future alerts require public source links, first-publication/ingestion timestamps, amended-record and cross-source deduplication, discretionary-vs-compensation/plan distinctions, sample sizes, uncertainty and out-of-sample evidence. Scheduling/notification delivery is a later Milestone 5 capability and is opt-in. Nothing in these milestones authorizes brokerage access or real-money trading.
+
+### Metric availability and report format
+
+A one-session series supports cumulative equity/accounting and drawdown, but annualized return/volatility, Sharpe/Sortino/Calmar and historical VaR/ES are unavailable (`null`). At two or more sessions, computable estimates are still statistically weak; the report includes the session count and the dashboard warns on short samples. Zero variance, zero downside or zero drawdown make the respective ratios undefined. Nonfinite derived numerical estimates (including annualization overflow) serialize as JSON `null`, never `NaN` or `Infinity`; malformed/empty equity is rejected. A missing estimate never means zero risk. No-exit win rate/profit factor/expectancy are unavailable, not fabricated zeros.
+
+See [the opt-in real-data procedure](ALPACA_SMOKE_TEST.md) for genuine-data prerequisites, evidence and the required manual corporate-action reconciliation.

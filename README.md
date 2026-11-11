@@ -63,3 +63,11 @@ python -m market_lab backtest DATASET_VERSION --strategy mean_reversion --window
 ```
 
 Use the same dataset version and parameters to reproduce a run. CLI output explicitly labels test fixtures and exploratory evaluation. JSON/CSV reports remain local; execution errors return a failing command status.
+
+## Review checks and data validation
+
+GitHub Actions runs the pinned dependency installation, `python -m pip check` and `python -m pytest -q` on Python 3.12 for pushes and pull requests. Tests are offline; no API keys are required or passed to CI.
+
+For genuine market data, follow the [opt-in Alpaca smoke-test procedure](docs/ALPACA_SMOKE_TEST.md). It checks complete market sessions, timestamps, raw-vs-adjusted behavior and provenance without submitting orders. Live provider validation is blocked until market-data credentials and exact-domain network access are available.
+
+**Only adjusted-price exploratory backtests are implemented.** Reports identify that mode explicitly; raw/executable-price simulation is unavailable, and raw datasets are rejected at the dashboard/CLI/report boundary. The [completion gates](docs/RESEARCH.md#simulation-modes-and-completion-gates-pr-1-review) cover corporate actions, untouched holdout testing and forward paper trading. SEC Form 4 monitoring, insider alerts, historical political events and news analysis are explicitly deferred to Milestone 3.

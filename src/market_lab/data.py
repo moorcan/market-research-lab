@@ -21,6 +21,9 @@ class Provenance:
     retrieved_at: str
     limitations: str
     fixture: bool = False
+    request_start: str | None = None
+    request_end: str | None = None
+    source_url: str | None = None
 
 class PriceProvider(Protocol):
     def fetch(self, symbol: str, start: str, end: str) -> tuple[pd.DataFrame, Provenance]: ...
@@ -46,11 +49,13 @@ def validate(frame, start=None, end=None):
 
 class AlpacaDaily:
     """Read-only IEX daily bars. No trading endpoint or order API."""
-    def fetch(self, symbol, start, end):
+    def fetch(self, symbol, start, end, *, adjustment="all"):
+        if adjustment not in ("all", "raw"):
+            raise ValueError("Only all or raw adjustment is supported")
         if symbol not in UNIVERSE:
             raise ValueError("MVP supports the documented ETF universe only")
         headers = {"APCA-API-KEY-ID": os.environ["APCA_API_KEY_ID"], "APCA-API-SECRET-KEY": os.environ["APCA_API_SECRET_KEY"]}
-        params = {"timeframe": "1Day", "start": start + "T00:00:00Z", "end": end + "T23:59:59Z", "adjustment": "all", "feed": "iex", "limit": 10000}
+        params = {"timeframe": "1Day", "start": start + "T00:00:00Z", "end": end + "T23:59:59Z", "adjustment": adjustment, "feed": "iex", "limit": 10000}
         rows = []
         while True:
             response = requests.get(f"https://data.alpaca.markets/v2/stocks/{symbol}/bars", headers=headers, params=params, timeout=30)
@@ -64,10 +69,14 @@ class AlpacaDaily:
         if not rows:
             raise ValueError("Provider returned no bars")
         frame = pd.DataFrame(rows).rename(columns={"o":"open", "h":"high", "l":"low", "c":"close", "v":"volume"})
-        frame.index = pd.to_datetime(frame.pop("t"), utc=True).dt.tz_convert("America/New_York").dt.tz_localize(None).dt.normalize()
+        timestamps = pd.to_datetime(frame.pop("t"), utc=True).dt.tz_convert("America/New_York")
+        local = timestamps.dt.tz_localize(None)
+        if not local.eq(local.dt.normalize()).all():
+            raise ValueError("Daily bar timestamps must identify New York session midnight")
+        frame.index = pd.DatetimeIndex(local)
         frame = frame[["open", "high", "low", "close", "volume"]].sort_index()
         validate(frame, start, end)
-        meta = Provenance("Alpaca", "stocks/v2 daily IEX", "IEX only, not consolidated SIP", "all", datetime.now(timezone.utc).isoformat(), "Dividend/split-adjusted research units, NOT executable prices; IEX volume is partial. No separate dividends credited. Fixed ETF universe has selection bias.")
+        meta = Provenance("Alpaca", "stocks/v2 daily IEX", "IEX only, not consolidated SIP", adjustment, datetime.now(timezone.utc).isoformat(), ("Dividend/split-adjusted research units, NOT executable prices; no separate dividends credited. " if adjustment == "all" else "Raw IEX bars for inspection only; corporate-action ledger is not implemented. ") + "IEX volume is partial. Fixed ETF universe has selection bias.", request_start=start, request_end=end, source_url=f"https://data.alpaca.markets/v2/stocks/{symbol}/bars")
         return frame, meta
 
 class Store:
@@ -100,3 +109,9 @@ class Store:
         frame = pd.read_parquet(row.path)
         validate(frame)
         return frame, Provenance(**json.loads(row.metadata))
+
+
+def require_adjusted_provenance(provenance):
+    """Do not mix smoke-test raw quotes into the adjusted-unit simulator."""
+    if provenance.adjustment != "all":
+        raise ValueError("Only adjustment=all datasets can enter exploratory backtests; executable-price simulation is not implemented")

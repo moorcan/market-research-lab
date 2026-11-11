@@ -1,17 +1,43 @@
-# Validation evidence
+# PR #1 review and validation evidence
 
-Validated in the Linux cloud workspace using Python 3.12.14. Windows commands are documented but have not been executed on a Windows host.
+## Findings resolved
 
-- `python -m pytest -q`: **15 passed**, including both strategies' future invariance, next-session gap execution, missing-session and malformed-bar rejection, fees/spread/slippage, cash/position limits, zero-volume rejection with expiry, flat-price independent closed-form accounting, realized/unrealized reconciliation, immutable DuckDB/Parquet roundtrip, provenance preservation, mocked provider pagination, event first-public availability/deduplication, all dashboard sections without credentials, and a labeled synthetic-fixture dashboard run.
-- `python -m pip check`: no broken requirements.
-- `python -m market_lab --help`: CLI entry point works.
+- **One-session report failure:** sample-standard-deviation volatility was NaN and strict JSON report writing raised an exception. Metrics now return explicit null for unavailable one-session estimates; tests run both baseline strategies on one, two and five sessions and exercise saved reports, CLI and dashboard. Empty history is rejected.
+- **Undefined/extreme metric handling:** zero variance/downside/drawdown and no completed exits retain undefined values rather than implying zero risk. Derived annualization overflow and nonfinite numerical values serialize as JSON null; unsupported object types still fail. Tests parse JSON with nonstandard NaN/Infinity tokens explicitly rejected.
+- **Ambiguous execution claims:** dashboard, CLI and saved reports identify adjusted-price exploration. Unsupported executable-price engine modes and raw-dataset entry into the dashboard/CLI/report path are rejected. This does not implement a realistic raw-price engine.
+- **Missing automation and live-data evidence procedure:** added Python 3.12 GitHub Actions dependency install, pip check and offline pytest, plus an opt-in read-only Alpaca smoke command and a manual adjustment-reconciliation checklist.
+
+## Checks run in this review
+
+A fresh virtual environment (`/tmp/market-lab-ci`) was created with Python 3.12.14. The same installation and validation commands used by CI were run:
+
+```sh
+python -m pip install -r requirements-lock.txt
+python -m pip install -e . --no-deps
+python -m pip check
+python -m pytest -q
+```
+
+- Pinned dependencies and editable package: installed successfully from scratch.
+- `pip check`: no broken requirements.
+- `pytest -q`: **43 passed**, with no skipped tests. Includes existing accounting/causality tests plus short datasets, undefined metrics, strict nested JSON serialization, CLI/dashboard report creation, raw-mode rejection, DST-aware adapter timestamps, complete holiday/session range checks, smoke-test provenance faults, inconclusive adjustment behavior, missing-key blocking and exception-content redaction.
+- Chromium/Playwright smoke check: passed against the running Streamlit app. Verified the adjusted-price-only notice, no-data Strategy Lab refusal and explicit Event Intelligence Milestone 3 deferrals. Screenshot: `/tmp/market-lab-pr1-review-browser.png` (local validation artifact, not committed).
 - `git diff --check`: passed.
-- Streamlit starts on loopback; UI is exercised with Streamlit AppTest. Browser smoke-test outcome is recorded below.
 
-Fixtures and mocked HTTP responses are **development tests only**, not genuine market observations, investment findings or alpha evidence. No performance claim is made from those runs.
+All test prices and mocked provider responses are explicitly **development fixtures**. Tests and browser checks do not establish genuine-data quality, alpha, or out-of-sample performance. GitHub-hosted CI execution is separate from this local reproduction; it cannot be claimed passed without checking the hosted result. Windows-host execution remains unverified.
 
-Alpaca market-data keys were absent (presence checked without printing values). Genuine provider retrieval is **unrun**, not passed. No real-market strategy results were generated. Windows-host validation, raw-price corporate actions, external reference-engine comparison, walk-forward/final holdout validation, and persistent forward paper trading remain unfinished. See RESEARCH.md for the full boundary and roadmap.
+## Genuine-data smoke result: blocked, not passed
 
-Browser smoke check: **passed** with Playwright using system Chromium (`/usr/bin/chromium`). Verified the rendered research-only warning, Strategy Lab's no-data state and Event Intelligence's explicit unfinished status. Playwright's bundled browser was initially absent; selecting the installed system Chromium resolved it. Screenshot retained outside the repository at `/tmp/market-lab-browser.png`.
+Executed:
 
-The fully pinned lockfile was reinstalled successfully in the current virtual environment; dependency consistency still passed. This verifies refresh in this instance, not installation on a fresh Windows machine.
+```sh
+python -m market_lab.smoke --symbol SPY --start 2024-03-01 --end 2024-04-05 --evidence reports/alpaca-smoke-review.json
+```
+
+Outcome: **exit 2**, `blocked_missing_credentials`. Both `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` are absent; only names/presence were inspected. No authenticated Alpaca request occurred and no real-market strategy results were generated. The current cloud network policy also does not allow `data.alpaca.markets`; that exact destination is required before a live check here. Never supply secrets in chat or commit them.
+
+Follow [ALPACA_SMOKE_TEST.md](ALPACA_SMOKE_TEST.md) after securely provisioning read-only market-data access. A successful command checks source data and observed adjustment differences; exact split/dividend factor reconciliation remains a separate manual check. Offline harness tests are not a substitute for this evidence.
+
+## Remaining completion gates
+
+[RESEARCH.md](RESEARCH.md) documents raw-price corporate-action accounting, independent executable-fill validation, frozen chronological holdout/walk-forward evaluation and durable local forward paper trading. These are still unfinished. SEC Form 4 monitoring, insider alerts, historical political events and news analysis are explicitly Milestone 3 work; current event interfaces do not provide these services. No live trading or real financial account access has been introduced.

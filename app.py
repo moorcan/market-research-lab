@@ -4,7 +4,7 @@ from datetime import date, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from market_lab.data import AlpacaDaily, Store, UNIVERSE
+from market_lab.data import AlpacaDaily, Store, UNIVERSE, require_adjusted_provenance
 from market_lab.strategies import Strategy
 from market_lab.backtest import run, metrics, trade_statistics, Costs
 from market_lab.experiments import record
@@ -12,6 +12,7 @@ from market_lab.experiments import record
 st.set_page_config(page_title="Market Research Lab", layout="wide")
 st.title("Market Research Lab")
 st.warning("Research and fictional paper simulation only. No brokerage connection or real orders. Starting fictional cash: $2,700.")
+st.info("Adjusted-price exploratory backtests only. Realistic executable-price simulations are not implemented.")
 st.caption("Exploratory historical results are not predictions. This MVP does not qualify strategies for forward paper trading.")
 store = Store()
 section = st.sidebar.radio("Workspace", ["Overview", "Strategy Lab", "Risk Center", "Paper Portfolio", "Research Journal", "Probability Lab", "Event Intelligence"])
@@ -43,6 +44,11 @@ elif section in ["Strategy Lab", "Risk Center", "Paper Portfolio"]:
         st.json(asdict(meta))
         if meta.fixture:
             st.error("SYNTHETIC TEST FIXTURE — development output only, not market research.")
+        try:
+            require_adjusted_provenance(meta)
+        except ValueError as exc:
+            st.error(str(exc))
+            st.stop()
         name = st.selectbox("Strategy", ["trend", "mean_reversion"])
         window = st.number_input("Trailing sessions",2,252,50)
         threshold = st.slider("Mean-reversion entry deviation",0.01,0.20,0.03)
@@ -56,6 +62,10 @@ elif section in ["Strategy Lab", "Risk Center", "Paper Portfolio"]:
             result = run(bars,strategy.signals(bars),initial,costs)
             benchmark = run(bars,pd.Series(1.0,index=bars.index),initial,costs)
             stress = run(bars,strategy.signals(bars),initial,Costs(fee*2,spread*3,slip*3))
+            if len(bars) < 2:
+                st.warning("Fewer than two sessions: annualized and distributional risk metrics are unavailable. No inference is supported.")
+            elif len(bars) < 252:
+                st.warning("Fewer than 252 sessions: risk and annualized statistics are especially unstable. This is exploratory output only.")
             st.caption("Adjusted research units; next-session open execution proxy, 95% allocation, 1% volume cap; idle cash earns zero. Benchmark uses identical constraints and costs.")
             curves = pd.DataFrame({"strategy":result.equity,"passive benchmark":benchmark.equity,"cash":initial,"higher cost stress":stress.equity})
             st.plotly_chart(px.line(curves, labels={"value":"Fictional equity ($)","index":"Session"}),use_container_width=True)
@@ -78,6 +88,6 @@ elif section == "Research Journal":
 elif section == "Probability Lab":
     st.info("Not implemented. No probabilities are produced. Holdout design, walk-forward validation and calibration are required in Milestone 2.")
 else:
-    st.info("Timestamp-safe event contracts and tests are implemented. Live SEC/news ingestion, research alerts and event studies remain unimplemented.")
+    st.info("Timestamp-safe event contracts and tests are implemented. SEC Form 4 monitoring, insider alerts, historical political events and news analysis are scheduled for Milestone 3 and remain unimplemented.")
     st.write("Use first-publication and ingestion timestamps, not underlying transaction dates. SEC code P alone does not prove discretionary buying or exclude an automatic plan.")
     st.write("Initial case: November 3, 2026 U.S. midterm election. No outcomes, market expectations or returns are seeded without verifiable public sources.")

@@ -2,6 +2,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from .data import validate
+from .serialization import json_safe
+
+ADJUSTED_EXPLORATORY = "adjusted_exploratory"
 
 @dataclass(frozen=True)
 class Costs:
@@ -20,8 +23,12 @@ class Result:
     shares: pd.Series
     journal: pd.DataFrame
     initial: float
+    simulation_mode: str = ADJUSTED_EXPLORATORY
 
-def run(bars, targets, initial=2700.0, costs=Costs(), max_allocation=0.95, participation=0.01):
+def run(bars, targets, initial=2700.0, costs=Costs(), max_allocation=0.95, participation=0.01, *, simulation_mode=ADJUSTED_EXPLORATORY):
+    """Adjusted-unit exploration only; no executable-price simulation is implemented."""
+    if simulation_mode != ADJUSTED_EXPLORATORY:
+        raise ValueError("Executable-price simulation is not implemented; use adjusted_exploratory only")
     validate(bars)
     if not np.isfinite(initial) or initial <= 0 or not 0 < max_allocation <= 1 or not 0 < participation <= 1:
         raise ValueError("Invalid portfolio assumptions")
@@ -57,18 +64,40 @@ def run(bars, targets, initial=2700.0, costs=Costs(), max_allocation=0.95, parti
     return Result(pd.Series(equity, index=bars.index, name="equity"), pd.Series(cashes,index=bars.index), pd.Series(positions,index=bars.index), pd.DataFrame(journal), initial)
 
 def metrics(result):
+    """Undefined or non-finite derived estimates are None, never NaN/Infinity.
+
+    Fewer than two sessions: cumulative accounting remains available, while
+    annualized/risk estimates are unavailable. Two sessions is computable,
+    not evidence of statistical adequacy; sample size is always reported.
+    """
     equity = result.equity
+    if equity.empty or not np.isfinite(equity).all() or (equity <= 0).any():
+        raise ValueError("Metrics require nonempty, positive finite equity")
+    if not np.isfinite(result.initial) or result.initial <= 0:
+        raise ValueError("Metrics require positive finite initial cash")
+    n = len(equity)
     returns = equity.pct_change()
     returns.iloc[0] = equity.iloc[0]/result.initial-1
     peak = equity.cummax().clip(lower=result.initial)
     dd = equity/peak-1
-    vol = returns.std(ddof=1)*np.sqrt(252)
-    downside = np.sqrt(np.mean(np.minimum(returns,0)**2))*np.sqrt(252)
-    annual = (equity.iloc[-1]/result.initial)**(252/len(equity))-1
-    q = returns.quantile(0.05)
+    vol = returns.std(ddof=1)*np.sqrt(252) if n >= 2 else None
+    downside = np.sqrt(np.mean(np.minimum(returns,0)**2))*np.sqrt(252) if n >= 2 else None
+    # Extreme short-window annualization can overflow; report it unavailable.
+    with np.errstate(over="ignore", invalid="ignore"):
+        annual = np.expm1(np.log(equity.iloc[-1]/result.initial)*252/n) if n >= 2 else None
+    q = returns.quantile(0.05) if n >= 2 else None
     journal = result.journal
     turnover = 0 if journal.empty else (journal.quantity*journal.reference_open).sum()/result.initial
-    return {"total_return":equity.iloc[-1]/result.initial-1, "annualized_return":annual, "max_drawdown":float(dd.min()), "annualized_volatility":vol, "sharpe_zero_cash_rate":returns.mean()*252/vol if vol>0 else None, "sortino_zero_cash_rate":returns.mean()*252/downside if downside>0 else None, "calmar":annual/abs(dd.min()) if dd.min()<0 else None, "historical_var_95_loss":-q, "historical_es_95_loss":-returns[returns<=q].mean(), "exposure":float((result.shares>0).mean()), "turnover":float(turnover)}
+    values = {"sessions":n, "total_return":equity.iloc[-1]/result.initial-1,
+              "annualized_return":annual, "max_drawdown":float(dd.min()),
+              "annualized_volatility":vol,
+              "sharpe_zero_cash_rate":returns.mean()*252/vol if vol is not None and vol>0 else None,
+              "sortino_zero_cash_rate":returns.mean()*252/downside if downside is not None and downside>0 else None,
+              "calmar":annual/abs(dd.min()) if annual is not None and dd.min()<0 else None,
+              "historical_var_95_loss":-q if q is not None else None,
+              "historical_es_95_loss":-returns[returns<=q].mean() if q is not None else None,
+              "exposure":float((result.shares>0).mean()), "turnover":float(turnover)}
+    return json_safe(values)
 
 def trade_statistics(result):
     """Average-cost realized P&L in adjusted research units; fees included."""
