@@ -1,0 +1,54 @@
+"""Repeatable local retrieval and historical research commands."""
+import argparse
+import pandas as pd
+from .data import AlpacaDaily, Store, UNIVERSE, require_adjusted_provenance
+from .strategies import Strategy
+from .backtest import run, Costs, metrics, trade_statistics
+from .experiments import record
+from .serialization import dumps
+from .providers.routing import ResearchDataService
+from .providers.robinhood import RobinhoodDaily
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Research only; never submits orders')
+    parser.add_argument('--data-dir',default='data')
+    sub = parser.add_subparsers(dest='command',required=True)
+    fetch = sub.add_parser('fetch')
+    fetch.add_argument('symbol',choices=UNIVERSE)
+    fetch.add_argument('start')
+    fetch.add_argument('end')
+    fetch.add_argument('--provider',choices=['alpaca','robinhood_mcp'],default='alpaca')
+    fetch.add_argument('--fallback',choices=['alpaca'],default=None)
+    test = sub.add_parser('backtest')
+    test.add_argument('version')
+    test.add_argument('--strategy',choices=['trend','mean_reversion'],default='trend')
+    test.add_argument('--window',type=int,default=50)
+    test.add_argument('--threshold',type=float,default=.03)
+    test.add_argument('--cash',type=float,default=2700)
+    test.add_argument('--fee-bps',type=float,default=1)
+    test.add_argument('--spread-bps',type=float,default=5)
+    test.add_argument('--slippage-bps',type=float,default=5)
+    test.add_argument('--reports-dir',default='reports')
+    args = parser.parse_args()
+    store = Store(args.data_dir)
+    if args.command == 'fetch':
+        start,end=pd.Timestamp(args.start),pd.Timestamp(args.end)
+        if start > end or end >= pd.Timestamp.now(tz='America/New_York').tz_localize(None).normalize():
+            parser.error('Use ordered completed historical dates')
+        service=ResearchDataService({"alpaca":AlpacaDaily(),"robinhood_mcp":RobinhoodDaily()})
+        retrieval=service.fetch(args.provider,args.symbol,start.date().isoformat(),end.date().isoformat(),fallback=args.fallback)
+        version=store.save(args.symbol,retrieval.bars,retrieval.provenance)
+        print(dumps({"dataset_version":version,"requested_provider":retrieval.requested_provider,"selected_provider":retrieval.selected_provider,"used_fallback":retrieval.used_fallback},indent=2))
+    else:
+        bars,meta=store.load(args.version)
+        require_adjusted_provenance(meta)
+        strategy=Strategy(args.strategy,args.window,args.threshold)
+        costs=Costs(args.fee_bps,args.spread_bps,args.slippage_bps)
+        result=run(bars,strategy.signals(bars),args.cash,costs)
+        passive=run(bars,pd.Series(1.,index=bars.index),args.cash,costs)
+        identifier=record(args.reports_dir,args.version,meta,strategy,costs,result)
+        print(dumps({'simulation_mode':result.simulation_mode,'executable_price_simulation':False,'status':'TEST FIXTURE ONLY' if meta.fixture else 'exploratory historical simulation; not holdout validated','experiment':identifier,'strategy':metrics(result),'passive':metrics(passive),'exits':trade_statistics(result),'beats_passive_and_cash':bool(result.equity.iloc[-1]>max(passive.equity.iloc[-1],args.cash))},indent=2))
+
+if __name__ == '__main__':
+    main()
