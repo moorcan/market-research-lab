@@ -8,6 +8,8 @@ from market_lab.data import AlpacaDaily, Store, UNIVERSE, require_adjusted_prove
 from market_lab.strategies import Strategy
 from market_lab.backtest import run, metrics, trade_statistics, Costs
 from market_lab.experiments import record
+from market_lab.providers.routing import ResearchDataService
+from market_lab.providers.robinhood import RobinhoodDaily
 
 st.set_page_config(page_title="Market Research Lab", layout="wide")
 st.title("Market Research Lab")
@@ -19,7 +21,10 @@ section = st.sidebar.radio("Workspace", ["Overview", "Strategy Lab", "Risk Cente
 if section == "Overview":
     st.subheader("Read-only market data")
     st.write("Alpaca IEX daily adjusted research bars; no synthetic fallback. Provider keys are read from environment variables.")
+    st.info("Robinhood official Trading MCP is being evaluated as a primary research-data candidate. It remains disabled pending verified official documentation, data-only authorization, tool schemas and provider comparison. Alpaca remains available.")
     with st.form("fetch"):
+        provider = st.selectbox("Data provider", ["alpaca", "robinhood_mcp"])
+        fallback = st.checkbox("Explicitly permit Alpaca fallback if the selected provider is unavailable", value=False)
         symbol = st.selectbox("ETF research universe", UNIVERSE)
         start = st.date_input("First session range", date(2020,1,1))
         end = st.date_input("Last session range (completed days only)", date.today()-timedelta(days=1))
@@ -28,7 +33,10 @@ if section == "Overview":
         try:
             if start > end or end >= date.today():
                 raise ValueError("Choose a past, ordered range")
-            bars, meta = AlpacaDaily().fetch(symbol,start.isoformat(),end.isoformat())
+            service = ResearchDataService({"alpaca": AlpacaDaily(), "robinhood_mcp": RobinhoodDaily()})
+            result = service.fetch(provider, symbol, start.isoformat(), end.isoformat(), fallback="alpaca" if fallback and provider != "alpaca" else None)
+            bars, meta = result.bars, result.provenance
+            st.write("Selected provider:", result.selected_provider, "Fallback used:", result.used_fallback)
             version = store.save(symbol,bars,meta)
             st.success(f"Validated and cached {len(bars)} sessions: {version}")
         except Exception as exc:

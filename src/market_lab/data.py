@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
@@ -24,6 +24,7 @@ class Provenance:
     request_start: str | None = None
     request_end: str | None = None
     source_url: str | None = None
+    symbol: str | None = None
 
 class PriceProvider(Protocol):
     def fetch(self, symbol: str, start: str, end: str) -> tuple[pd.DataFrame, Provenance]: ...
@@ -76,7 +77,7 @@ class AlpacaDaily:
         frame.index = pd.DatetimeIndex(local)
         frame = frame[["open", "high", "low", "close", "volume"]].sort_index()
         validate(frame, start, end)
-        meta = Provenance("Alpaca", "stocks/v2 daily IEX", "IEX only, not consolidated SIP", adjustment, datetime.now(timezone.utc).isoformat(), ("Dividend/split-adjusted research units, NOT executable prices; no separate dividends credited. " if adjustment == "all" else "Raw IEX bars for inspection only; corporate-action ledger is not implemented. ") + "IEX volume is partial. Fixed ETF universe has selection bias.", request_start=start, request_end=end, source_url=f"https://data.alpaca.markets/v2/stocks/{symbol}/bars")
+        meta = Provenance("Alpaca", "stocks/v2 daily IEX", "IEX only, not consolidated SIP", adjustment, datetime.now(timezone.utc).isoformat(), ("Dividend/split-adjusted research units, NOT executable prices; no separate dividends credited. " if adjustment == "all" else "Raw IEX bars for inspection only; corporate-action ledger is not implemented. ") + "IEX volume is partial. Fixed ETF universe has selection bias.", request_start=start, request_end=end, source_url=f"https://data.alpaca.markets/v2/stocks/{symbol}/bars", symbol=symbol)
         return frame, meta
 
 class Store:
@@ -86,6 +87,9 @@ class Store:
     def save(self, symbol, frame, meta):
         if symbol not in UNIVERSE:
             raise ValueError("Unknown symbol")
+        if meta.symbol is not None and meta.symbol != symbol:
+            raise ValueError("Dataset symbol does not match provenance")
+        meta = replace(meta, symbol=symbol)
         validate(frame)
         # Immutable versions preserve experiment inputs and provider adjustment vintages.
         import hashlib
@@ -108,7 +112,12 @@ class Store:
         row = rows.loc[rows.version == version].iloc[0]
         frame = pd.read_parquet(row.path)
         validate(frame)
-        return frame, Provenance(**json.loads(row.metadata))
+        meta = Provenance(**json.loads(row.metadata))
+        if meta.symbol is None:
+            meta = replace(meta, symbol=row.symbol)
+        elif meta.symbol != row.symbol:
+            raise ValueError("Catalog symbol does not match provenance")
+        return frame, meta
 
 
 def require_adjusted_provenance(provenance):

@@ -71,3 +71,18 @@ GitHub Actions runs the pinned dependency installation, `python -m pip check` an
 For genuine market data, follow the [opt-in Alpaca smoke-test procedure](docs/ALPACA_SMOKE_TEST.md). It checks complete market sessions, timestamps, raw-vs-adjusted behavior and provenance without submitting orders. Live provider validation is blocked until market-data credentials and exact-domain network access are available.
 
 **Only adjusted-price exploratory backtests are implemented.** Reports identify that mode explicitly; raw/executable-price simulation is unavailable, and raw datasets are rejected at the dashboard/CLI/report boundary. The [completion gates](docs/RESEARCH.md#simulation-modes-and-completion-gates-pr-1-review) cover corporate actions, untouched holdout testing and forward paper trading. SEC Form 4 monitoring, insider alerts, historical political events and news analysis are explicitly deferred to Milestone 3.
+
+
+## Robinhood Trading MCP evaluation
+
+Robinhood's supplied official MCP endpoint is being evaluated as a primary **research-data candidate**, but it is disabled pending official-documentation, authorization, schema, licensing and quality verification. This change does not connect to Robinhood accounts or use Codex connector credentials. The production data-tool allowlist is empty; no authenticated MCP request or genuine cross-provider comparison has passed.
+
+The [evaluation matrix and app-owned authorization architecture](docs/ROBINHOOD_MCP_EVALUATION.md) state what is blocked and how to complete a safe proof of concept. Alpaca remains usable. Selection is explicit, and fallback is opt-in:
+
+```powershell
+python -m market_lab fetch SPY 2024-03-01 2024-04-05 --provider alpaca
+# Robinhood is currently blocked; this command uses Alpaca only when explicitly permitted:
+python -m market_lab fetch SPY 2024-03-01 2024-04-05 --provider robinhood_mcp --fallback alpaca
+```
+
+Fetch now prints JSON containing `dataset_version`, `requested_provider`, `selected_provider` and `used_fallback`. A fallback dataset retains its actual Alpaca provenance; it must never be reported as Robinhood data. The dashboard also makes source selection explicit.

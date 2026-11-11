@@ -1,3 +1,21 @@
+# Robinhood MCP candidate follow-up
+
+This follow-up adds a provider-neutral selection/fallback boundary, an empty immutable MCP data-tool allowlist, a disabled Robinhood daily adapter, and a cached-data consistency comparison command. No production MCP authorization/HTTP transport or live tool binding is implemented. The Python application cannot inherit a Codex connector's authorization.
+
+Current follow-up validation:
+
+- Full offline suite: **74 passed**. Includes all prior tests plus research-operation denials, arbitrary order/account-name rejection, immutable allowlist enforcement, fixture-only argument validation before transport, opt-in fallback with honest provenance, refusal to mask data errors, instrument/adjustment comparison guards, truncated-range diagnosis, fixture-labeled comparison CLI, and dashboard refusal without silent Alpaca access.
+- Dependency consistency: `pip check` passed; no dependencies added.
+- Both provider-selection and comparison CLI help commands work. `git diff --check` passed.
+- A direct request to the supplied Robinhood endpoint failed at the cloud egress proxy (HTTP 403 CONNECT denial). Official docs and authenticated access remain **blocked/unverified**, not failed-provider capability claims. No account data or real assets were accessed.
+- The running policy has not yet shown the requested Robinhood/Alpaca domain additions. No Robinhood or Alpaca authorization is configured in this session. No genuine cross-provider comparison has run.
+
+See [ROBINHOOD_MCP_EVALUATION.md](ROBINHOOD_MCP_EVALUATION.md) for the official-source verification matrix, exact unresolved prerequisites, app-owned authorization design and criteria for considering Robinhood primary. All currently enumerated capabilities remain denied; offline tests do not establish authenticated integration or data accuracy.
+
+The earlier PR #1 review evidence below records checks from the preceding implementation, not live Robinhood verification.
+
+---
+
 # PR #1 review and validation evidence
 
 ## Findings resolved

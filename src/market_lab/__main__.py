@@ -6,6 +6,8 @@ from .strategies import Strategy
 from .backtest import run, Costs, metrics, trade_statistics
 from .experiments import record
 from .serialization import dumps
+from .providers.routing import ResearchDataService
+from .providers.robinhood import RobinhoodDaily
 
 
 def main():
@@ -16,6 +18,8 @@ def main():
     fetch.add_argument('symbol',choices=UNIVERSE)
     fetch.add_argument('start')
     fetch.add_argument('end')
+    fetch.add_argument('--provider',choices=['alpaca','robinhood_mcp'],default='alpaca')
+    fetch.add_argument('--fallback',choices=['alpaca'],default=None)
     test = sub.add_parser('backtest')
     test.add_argument('version')
     test.add_argument('--strategy',choices=['trend','mean_reversion'],default='trend')
@@ -32,8 +36,10 @@ def main():
         start,end=pd.Timestamp(args.start),pd.Timestamp(args.end)
         if start > end or end >= pd.Timestamp.now(tz='America/New_York').tz_localize(None).normalize():
             parser.error('Use ordered completed historical dates')
-        bars,meta=AlpacaDaily().fetch(args.symbol,start.date().isoformat(),end.date().isoformat())
-        print(store.save(args.symbol,bars,meta))
+        service=ResearchDataService({"alpaca":AlpacaDaily(),"robinhood_mcp":RobinhoodDaily()})
+        retrieval=service.fetch(args.provider,args.symbol,start.date().isoformat(),end.date().isoformat(),fallback=args.fallback)
+        version=store.save(args.symbol,retrieval.bars,retrieval.provenance)
+        print(dumps({"dataset_version":version,"requested_provider":retrieval.requested_provider,"selected_provider":retrieval.selected_provider,"used_fallback":retrieval.used_fallback},indent=2))
     else:
         bars,meta=store.load(args.version)
         require_adjusted_provenance(meta)
